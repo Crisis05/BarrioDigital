@@ -1,6 +1,7 @@
 import { ApplicationConfig, inject, provideAppInitializer, provideZoneChangeDetection } from '@angular/core';
 import { provideRouter } from '@angular/router';
 import { HTTP_INTERCEPTORS, provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+import { catchError, of } from 'rxjs';
 import {
   MsalBroadcastService,
   MsalGuard,
@@ -71,7 +72,15 @@ export function MSALGuardConfigFactory(): MsalGuardConfiguration {
 export const appConfig: ApplicationConfig = {
   providers: [
     provideZoneChangeDetection({ eventCoalescing: true }),
-    provideAppInitializer(() => inject(MsalService).initialize()),
+    provideAppInitializer(() => {
+      const msalService = inject(MsalService);
+      return msalService.initialize().pipe(
+        catchError((err: any) => {
+          console.warn('MSAL initialization warning handled:', err);
+          return of(undefined);
+        })
+      );
+    }),
     provideRouter(routes),
     provideHttpClient(withInterceptorsFromDi()),
     {

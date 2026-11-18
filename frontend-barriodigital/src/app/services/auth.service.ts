@@ -54,15 +54,19 @@ export class AuthService {
   }
 
   public checkCurrentAccount(): void {
-    const activeAccount = this.msalService.instance.getActiveAccount();
-    if (activeAccount) {
-      this.extractAndSetUser(activeAccount);
-    } else {
-      const accounts = this.msalService.instance.getAllAccounts();
-      if (accounts.length > 0) {
-        this.msalService.instance.setActiveAccount(accounts[0]);
-        this.extractAndSetUser(accounts[0]);
+    try {
+      const activeAccount = this.msalService.instance.getActiveAccount();
+      if (activeAccount) {
+        this.extractAndSetUser(activeAccount);
+      } else {
+        const accounts = this.msalService.instance.getAllAccounts();
+        if (accounts.length > 0) {
+          this.msalService.instance.setActiveAccount(accounts[0]);
+          this.extractAndSetUser(accounts[0]);
+        }
       }
+    } catch (err) {
+      console.warn('MSAL checkCurrentAccount handled:', err);
     }
   }
 
