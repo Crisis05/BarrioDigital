@@ -28,12 +28,18 @@ export function loggerCallback(logLevel: LogLevel, message: string) {
 }
 
 export function MSALInstanceFactory(): IPublicClientApplication {
+  const currentOrigin = (typeof window !== 'undefined' && window.location && window.location.origin)
+    ? window.location.origin
+    : environment.azureAd.redirectUri.replace(/\/$/, '');
+  const dynamicRedirectUri = `${currentOrigin}/`;
+  const dynamicPostLogoutUri = `${currentOrigin}/login`;
+
   return new PublicClientApplication({
     auth: {
       clientId: environment.azureAd.clientId,
       authority: `https://login.microsoftonline.com/${environment.azureAd.tenantId}`,
-      redirectUri: environment.azureAd.redirectUri,
-      postLogoutRedirectUri: environment.azureAd.postLogoutRedirectUri
+      redirectUri: dynamicRedirectUri,
+      postLogoutRedirectUri: dynamicPostLogoutUri
     },
     cache: {
       cacheLocation: BrowserCacheLocation.LocalStorage,

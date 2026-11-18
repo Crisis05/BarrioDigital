@@ -8,6 +8,6 @@ export const environment = {
     postLogoutRedirectUri: 'http://localhost:4200/login',
     apiScope: 'api://3c53448e-df26-462e-912f-f8acda44d1a4/access_as_user'
   },
-  // AWS API Gateway / BFF URL
-  apiGatewayUrl: 'http://localhost:8080' // En AWS: 'https://<api-id>.execute-api.<region>.amazonaws.com'
+  // En entorno desplegado o Nginx se usa ruta relativa '' que proxia hacia el BFF
+  apiGatewayUrl: (typeof window !== 'undefined' && window.location.port !== '4200') ? '' : 'http://localhost:8080'
 };
