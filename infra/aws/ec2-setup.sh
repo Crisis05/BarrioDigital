@@ -35,20 +35,26 @@ if [ "$TOTAL_RAM" -le 2500 ] && [ ! -f /swapfile ]; then
     echo "✓ Memoria Swap de 4GB activada exitosamente."
 fi
 
-# Instalar Docker Buildx si no existe o es antiguo
+# Carpetas estándar para plugins de Docker
+sudo mkdir -p /usr/local/lib/docker/cli-plugins /usr/libexec/docker/cli-plugins
+
+# Instalar Docker Buildx si no existe
 if ! docker buildx version &> /dev/null; then
     echo "Instalando Docker Buildx..."
-    sudo mkdir -p /usr/local/lib/docker/cli-plugins /usr/libexec/docker/cli-plugins
     BUILDX_URL="https://github.com/docker/buildx/releases/download/v0.19.3/buildx-v0.19.3.linux-amd64"
-    sudo curl -SL "$BUILDX_URL" -o /usr/local/lib/docker/cli-plugins/docker-buildx
-    sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-buildx
-    sudo cp /usr/local/lib/docker/cli-plugins/docker-buildx /usr/libexec/docker/cli-plugins/docker-buildx
+    sudo curl -SL "$BUILDX_URL" -o /usr/libexec/docker/cli-plugins/docker-buildx
+    sudo chmod +x /usr/libexec/docker/cli-plugins/docker-buildx
+    sudo cp /usr/libexec/docker/cli-plugins/docker-buildx /usr/local/lib/docker/cli-plugins/docker-buildx
 fi
 
-# Instalar Docker Compose v2 si no existe
-if ! command -v docker-compose &> /dev/null; then
+# Instalar Docker Compose (como binario independiente y como plugin de Docker)
+if ! docker compose version &> /dev/null && ! command -v docker-compose &> /dev/null; then
     echo "Instalando Docker Compose..."
-    sudo curl -SL https://github.com/docker/compose/releases/download/v2.32.4/docker-compose-linux-x86_64 -o /usr/local/bin/docker-compose
+    COMPOSE_URL="https://github.com/docker/compose/releases/download/v2.32.4/docker-compose-linux-x86_64"
+    sudo curl -SL "$COMPOSE_URL" -o /usr/libexec/docker/cli-plugins/docker-compose
+    sudo chmod +x /usr/libexec/docker/cli-plugins/docker-compose
+    sudo cp /usr/libexec/docker/cli-plugins/docker-compose /usr/local/lib/docker/cli-plugins/docker-compose
+    sudo cp /usr/libexec/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose
     sudo chmod +x /usr/local/bin/docker-compose
 fi
 
