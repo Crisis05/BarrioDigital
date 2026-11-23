@@ -2,6 +2,7 @@ import { ApplicationConfig, inject, provideAppInitializer, provideZoneChangeDete
 import { provideRouter } from '@angular/router';
 import { HTTP_INTERCEPTORS, provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { catchError, of } from 'rxjs';
+import { AuthInterceptor } from './interceptors/auth.interceptor';
 import {
   MsalBroadcastService,
   MsalGuard,
@@ -91,7 +92,7 @@ export const appConfig: ApplicationConfig = {
     provideHttpClient(withInterceptorsFromDi()),
     {
       provide: HTTP_INTERCEPTORS,
-      useClass: MsalInterceptor,
+      useClass: AuthInterceptor,
       multi: true
     },
     {

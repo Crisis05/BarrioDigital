@@ -16,10 +16,11 @@ export interface UserProfile {
   providedIn: 'root'
 })
 export class AuthService {
+  private readonly STORAGE_KEY = 'barriodigital_user';
   private msalService = inject(MsalService);
   private msalBroadcastService = inject(MsalBroadcastService);
 
-  private currentUserSubject = new BehaviorSubject<UserProfile | null>(null);
+  private currentUserSubject = new BehaviorSubject<UserProfile | null>(this.loadStoredUser());
   public currentUser$ = this.currentUserSubject.asObservable();
 
   private isAuthenticatingSubject = new BehaviorSubject<boolean>(false);
@@ -28,6 +29,35 @@ export class AuthService {
   constructor() {
     this.initMsalListener();
     this.checkCurrentAccount();
+  }
+
+  private loadStoredUser(): UserProfile | null {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const stored = localStorage.getItem(this.STORAGE_KEY);
+        if (stored) {
+          return JSON.parse(stored);
+        }
+      }
+    } catch (e) {
+      console.warn('Error al leer usuario de localStorage:', e);
+    }
+    return null;
+  }
+
+  private setCurrentUser(profile: UserProfile | null): void {
+    this.currentUserSubject.next(profile);
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        if (profile) {
+          localStorage.setItem(this.STORAGE_KEY, JSON.stringify(profile));
+        } else {
+          localStorage.removeItem(this.STORAGE_KEY);
+        }
+      }
+    } catch (e) {
+      console.warn('Error al persistir usuario en localStorage:', e);
+    }
   }
 
   private initMsalListener(): void {
@@ -54,6 +84,11 @@ export class AuthService {
   }
 
   public checkCurrentAccount(): void {
+    // Si ya hay un usuario demo activo, no sobreescribirlo
+    if (this.currentUserSubject.value?.isDemoUser) {
+      return;
+    }
+
     try {
       const activeAccount = this.msalService.instance.getActiveAccount();
       if (activeAccount) {
@@ -91,7 +126,7 @@ export class AuthService {
       isDemoUser: false
     };
 
-    this.currentUserSubject.next(profile);
+    this.setCurrentUser(profile);
   }
 
   public login(): Observable<AuthenticationResult> {
@@ -108,10 +143,17 @@ export class AuthService {
   }
 
   public logout(): void {
-    this.currentUserSubject.next(null);
-    this.msalService.logoutPopup({
-      postLogoutRedirectUri: environment.azureAd.postLogoutRedirectUri
-    }).subscribe();
+    this.setCurrentUser(null);
+    try {
+      const activeAccount = this.msalService.instance.getActiveAccount();
+      if (activeAccount) {
+        this.msalService.logoutPopup({
+          postLogoutRedirectUri: environment.azureAd.postLogoutRedirectUri
+        }).subscribe();
+      }
+    } catch (e) {
+      console.warn('MSAL logoutPopup handled:', e);
+    }
   }
 
   public async getAccessToken(): Promise<string | null> {
@@ -185,7 +227,7 @@ export class AuthService {
 
     const profile = demoProfiles[role];
     if (profile) {
-      this.currentUserSubject.next(profile);
+      this.setCurrentUser(profile);
     }
   }
 }
