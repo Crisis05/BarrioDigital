@@ -68,6 +68,8 @@ services:
       context: ../ms-barriodigital-catalog
       dockerfile: Dockerfile
     container_name: catalog-svc
+    volumes:
+      - catalog-data:/app/data
     environment:
       JAVA_TOOL_OPTIONS: "-Xms64m -Xmx130m -XX:+UseSerialGC"
     ports:
@@ -84,6 +86,8 @@ services:
       - rabbitmq
       - kafka
       - catalog-svc
+    volumes:
+      - requests-data:/app/data
     ports:
       - "8081:8081"
     environment:
@@ -133,6 +137,8 @@ services:
     container_name: audit-svc
     depends_on:
       - kafka
+    volumes:
+      - audit-data:/app/data
     ports:
       - "8085:8085"
     environment:
@@ -197,3 +203,8 @@ services:
 networks:
   barriodigital-net:
     driver: bridge
+
+volumes:
+  requests-data:
+  catalog-data:
+  audit-data:
