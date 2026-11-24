@@ -168,17 +168,51 @@ export class AuthService {
     }
 
     const account = this.msalService.instance.getActiveAccount();
-    if (!account) return null;
+    if (!account) {
+      console.warn('[AuthService] getAccessToken: no hay cuenta activa en MSAL');
+      return null;
+    }
 
+    // 1er intento: access token para el scope de la API (ideal)
     try {
       const response = await this.msalService.instance.acquireTokenSilent({
         account: account,
         scopes: [environment.azureAd.apiScope]
       });
-      return response.accessToken;
-    } catch {
-      return null;
+      if (response.accessToken) {
+        console.log('[AuthService] Access token para API obtenido correctamente');
+        return response.accessToken;
+      }
+    } catch (err) {
+      console.warn('[AuthService] acquireTokenSilent (API scope) falló:', err);
     }
+
+    // 2do intento: popup para consentir el scope si aún no fue consentido
+    try {
+      const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const redirectUri = isLocal ? 'http://localhost:4200/' : 'https://50.16.132.25/';
+      const response = await this.msalService.instance.acquireTokenSilent({
+        account: account,
+        scopes: ['openid', 'profile', 'email']
+      });
+      // Usar idToken como fallback: el BFF también lo acepta
+      if (response.idToken) {
+        console.log('[AuthService] Usando idToken como fallback para autorización');
+        return response.idToken;
+      }
+    } catch (err2) {
+      console.warn('[AuthService] acquireTokenSilent (openid) falló:', err2);
+    }
+
+    // 3er intento: idToken guardado en la cuenta MSAL
+    const rawIdToken = (account as any).idToken;
+    if (rawIdToken) {
+      console.log('[AuthService] Usando idToken del account cache');
+      return rawIdToken;
+    }
+
+    console.error('[AuthService] No se pudo obtener ningún token para el usuario de Azure AD');
+    return null;
   }
 
   public hasRole(role: string): boolean {

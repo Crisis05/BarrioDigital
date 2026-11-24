@@ -44,6 +44,9 @@ public class SecurityConfig {
     @Value("${azure.ad.client-id}")
     private String clientId;
 
+    @Value("${azure.ad.frontend-client-id:bbf3d1bd-ee73-4f0f-8efc-90a3688a1199}")
+    private String frontendClientId;
+
     @Value("${security.mock-jwt-enabled:false}")
     private boolean mockJwtEnabled;
 
@@ -118,7 +121,7 @@ public class SecurityConfig {
         try {
             NimbusJwtDecoder nimbus = NimbusJwtDecoder.withJwkSetUri(jwkSetUri).build();
             OAuth2TokenValidator<Jwt> defaultValidator = JwtValidators.createDefaultWithIssuer(issuerUri);
-            OAuth2TokenValidator<Jwt> audienceValidator = new AudienceValidator(expectedAudience, clientId);
+            OAuth2TokenValidator<Jwt> audienceValidator = new AudienceValidator(expectedAudience, clientId, frontendClientId);
             OAuth2TokenValidator<Jwt> combinedValidator = new DelegatingOAuth2TokenValidator<>(defaultValidator, audienceValidator);
             nimbus.setJwtValidator(combinedValidator);
             azureDecoder = nimbus;
@@ -172,24 +175,23 @@ public class SecurityConfig {
 
     /**
      * Validador de Audience para asegurar que el token fue emitido especificamente para esta API.
+     * Acepta: access tokens (aud=api://backendClientId), e ID tokens (aud=frontendClientId).
      */
     static class AudienceValidator implements OAuth2TokenValidator<Jwt> {
-        private final String expectedAudience;
-        private final String clientId;
+        private final List<String> validAudiences;
 
-        public AudienceValidator(String expectedAudience, String clientId) {
-            this.expectedAudience = expectedAudience;
-            this.clientId = clientId;
+        public AudienceValidator(String... validAudiences) {
+            this.validAudiences = Arrays.asList(validAudiences);
         }
 
         @Override
         public OAuth2TokenValidatorResult validate(Jwt jwt) {
             List<String> audience = jwt.getAudience();
-            if (audience != null && (audience.contains(expectedAudience) || audience.contains(clientId))) {
+            if (audience != null && audience.stream().anyMatch(validAudiences::contains)) {
                 return OAuth2TokenValidatorResult.success();
             }
-            OAuth2Error error = new OAuth2Error("invalid_token", 
-                "El token de Azure AD no contiene la audiencia requerida (" + expectedAudience + " o " + clientId + ")", null);
+            OAuth2Error error = new OAuth2Error("invalid_token",
+                "El token no contiene una audiencia válida. Esperadas: " + validAudiences, null);
             return OAuth2TokenValidatorResult.failure(error);
         }
     }
