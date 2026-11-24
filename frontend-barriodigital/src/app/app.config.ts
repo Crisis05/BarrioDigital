@@ -29,14 +29,9 @@ export function loggerCallback(logLevel: LogLevel, message: string) {
 }
 
 export function MSALInstanceFactory(): IPublicClientApplication {
-  let currentOrigin = (typeof window !== 'undefined' && window.location && window.location.origin)
+  const currentOrigin = (typeof window !== 'undefined' && window.location && window.location.origin)
     ? window.location.origin
     : environment.azureAd.redirectUri.replace(/\/$/, '');
-
-  // Microsoft Entra ID exige estrictamente HTTPS para cualquier IP o dominio externo (no localhost)
-  if (!currentOrigin.includes('localhost') && currentOrigin.startsWith('http://')) {
-    currentOrigin = currentOrigin.replace('http://', 'https://');
-  }
 
   const dynamicRedirectUri = `${currentOrigin}/`;
   const dynamicPostLogoutUri = `${currentOrigin}/login`;
