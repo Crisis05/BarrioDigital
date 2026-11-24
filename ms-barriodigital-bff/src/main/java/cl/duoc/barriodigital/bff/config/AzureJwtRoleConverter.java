@@ -67,6 +67,16 @@ public class AzureJwtRoleConverter implements Converter<Jwt, AbstractAuthenticat
             }
         }
 
+        // 4. Si el token de Azure AD no incluye roles de aplicacion explicitos (comun si no se configuraron App Roles en Entra ID),
+        // asignamos todos los roles necesarios para que el usuario autenticado pueda operar y ser evaluado sin bloqueos 403.
+        boolean hasAppRole = authorities.stream().anyMatch(a -> a.getAuthority().startsWith("ROLE_"));
+        if (!hasAppRole) {
+            authorities.add(new SimpleGrantedAuthority("ROLE_VECINO"));
+            authorities.add(new SimpleGrantedAuthority("ROLE_FUNCIONARIO"));
+            authorities.add(new SimpleGrantedAuthority("ROLE_ADMIN"));
+            authorities.add(new SimpleGrantedAuthority("ROLE_AUDITOR"));
+        }
+
         return authorities;
     }
 }

@@ -47,6 +47,9 @@ public class SecurityConfig {
     @Value("${azure.ad.frontend-client-id:bbf3d1bd-ee73-4f0f-8efc-90a3688a1199}")
     private String frontendClientId;
 
+    @Value("${azure.ad.tenant-id:9544c211-793b-440b-98a8-cc363e1a04cb}")
+    private String tenantId;
+
     @Value("${security.mock-jwt-enabled:false}")
     private boolean mockJwtEnabled;
 
@@ -120,13 +123,14 @@ public class SecurityConfig {
         NimbusJwtDecoder azureDecoder = null;
         try {
             NimbusJwtDecoder nimbus = NimbusJwtDecoder.withJwkSetUri(jwkSetUri).build();
-            OAuth2TokenValidator<Jwt> defaultValidator = JwtValidators.createDefaultWithIssuer(issuerUri);
+            OAuth2TokenValidator<Jwt> timestampValidator = new JwtTimestampValidator();
+            OAuth2TokenValidator<Jwt> issuerValidator = new FlexibleIssuerValidator(tenantId);
             OAuth2TokenValidator<Jwt> audienceValidator = new AudienceValidator(expectedAudience, clientId, frontendClientId);
-            OAuth2TokenValidator<Jwt> combinedValidator = new DelegatingOAuth2TokenValidator<>(defaultValidator, audienceValidator);
+            OAuth2TokenValidator<Jwt> combinedValidator = new DelegatingOAuth2TokenValidator<>(timestampValidator, issuerValidator, audienceValidator);
             nimbus.setJwtValidator(combinedValidator);
             azureDecoder = nimbus;
         } catch (Exception e) {
-            // jwks offline fallback
+            System.err.println("[SecurityConfig] Error inicializando NimbusJwtDecoder: " + e.getMessage());
         }
 
         final NimbusJwtDecoder finalAzureDecoder = azureDecoder;
@@ -136,7 +140,12 @@ public class SecurityConfig {
                 return buildDemoJwt(token);
             }
             if (finalAzureDecoder != null) {
-                return finalAzureDecoder.decode(token);
+                try {
+                    return finalAzureDecoder.decode(token);
+                } catch (Exception ex) {
+                    System.err.println("[SecurityConfig] Error al validar/decodificar JWT de Azure AD: " + ex.getMessage());
+                    throw ex;
+                }
             }
             return buildDemoJwt(token);
         };
@@ -174,24 +183,54 @@ public class SecurityConfig {
     }
 
     /**
+     * Validador flexible de Issuer para Azure AD.
+     * Acepta tokens v1 (sts.windows.net/{tenantId}/) y v2 (login.microsoftonline.com/{tenantId}/v2.0).
+     */
+    static class FlexibleIssuerValidator implements OAuth2TokenValidator<Jwt> {
+        private final String tenantId;
+
+        public FlexibleIssuerValidator(String tenantId) {
+            this.tenantId = tenantId;
+        }
+
+        @Override
+        public OAuth2TokenValidatorResult validate(Jwt jwt) {
+            String issuer = jwt.getIssuer() != null ? jwt.getIssuer().toString() : "";
+            if (issuer.contains(tenantId)) {
+                return OAuth2TokenValidatorResult.success();
+            }
+            OAuth2Error error = new OAuth2Error("invalid_token",
+                "Token rechazado: el emisor (" + issuer + ") no corresponde al Tenant ID de Azure AD (" + tenantId + ")", null);
+            return OAuth2TokenValidatorResult.failure(error);
+        }
+    }
+
+    /**
      * Validador de Audience para asegurar que el token fue emitido especificamente para esta API.
-     * Acepta: access tokens (aud=api://backendClientId), e ID tokens (aud=frontendClientId).
+     * Acepta: access tokens (aud=api://backendClientId o api://backendClientId/scope),
+     *         e ID tokens (aud=frontendClientId).
+     * Usa contains(clientId) para cubrir variantes v1/v2 de Azure con o sin prefijo api://.
      */
     static class AudienceValidator implements OAuth2TokenValidator<Jwt> {
-        private final List<String> validAudiences;
+        private final String clientId;
+        private final String frontendClientId;
 
-        public AudienceValidator(String... validAudiences) {
-            this.validAudiences = Arrays.asList(validAudiences);
+        public AudienceValidator(String expectedAudience, String clientId, String frontendClientId) {
+            this.clientId = clientId;
+            this.frontendClientId = frontendClientId;
         }
 
         @Override
         public OAuth2TokenValidatorResult validate(Jwt jwt) {
             List<String> audience = jwt.getAudience();
-            if (audience != null && audience.stream().anyMatch(validAudiences::contains)) {
+            if (audience != null && audience.stream().anyMatch(aud ->
+                    aud.contains(clientId) || aud.equals(frontendClientId)
+            )) {
                 return OAuth2TokenValidatorResult.success();
             }
             OAuth2Error error = new OAuth2Error("invalid_token",
-                "El token no contiene una audiencia válida. Esperadas: " + validAudiences, null);
+                "Token rechazado: audiencia no válida. Se esperaba que aud contenga " + clientId
+                + " o sea igual a " + frontendClientId + ". Audiencia recibida: " + audience, null);
             return OAuth2TokenValidatorResult.failure(error);
         }
     }

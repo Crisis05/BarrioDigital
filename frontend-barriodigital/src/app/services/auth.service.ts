@@ -26,6 +26,10 @@ export class AuthService {
   private isAuthenticatingSubject = new BehaviorSubject<boolean>(false);
   public isAuthenticating$ = this.isAuthenticatingSubject.asObservable();
 
+  private cachedToken: string | null = null;
+  private tokenExpiresAt: number = 0;
+  private tokenPromise: Promise<string | null> | null = null;
+
   constructor() {
     this.initMsalListener();
     this.checkCurrentAccount();
@@ -148,6 +152,8 @@ export class AuthService {
   }
 
   public logout(): void {
+    this.cachedToken = null;
+    this.tokenExpiresAt = 0;
     this.setCurrentUser(null);
     try {
       const activeAccount = this.msalService.instance.getActiveAccount();
@@ -167,19 +173,39 @@ export class AuthService {
       return 'demo-token-' + current.roles.join('-');
     }
 
+    if (this.cachedToken && Date.now() < this.tokenExpiresAt - 60000) {
+      return this.cachedToken;
+    }
+
+    if (this.tokenPromise) {
+      return this.tokenPromise;
+    }
+
+    this.tokenPromise = this.fetchToken();
+    try {
+      const token = await this.tokenPromise;
+      return token;
+    } finally {
+      this.tokenPromise = null;
+    }
+  }
+
+  private async fetchToken(): Promise<string | null> {
     const account = this.msalService.instance.getActiveAccount();
     if (!account) {
       console.warn('[AuthService] getAccessToken: no hay cuenta activa en MSAL');
       return null;
     }
 
-    // 1er intento: access token para el scope de la API (ideal)
+    // 1er intento: access token para el scope de la API
     try {
       const response = await this.msalService.instance.acquireTokenSilent({
         account: account,
         scopes: [environment.azureAd.apiScope]
       });
       if (response.accessToken) {
+        this.cachedToken = response.accessToken;
+        this.tokenExpiresAt = response.expiresOn ? response.expiresOn.getTime() : Date.now() + 3600000;
         console.log('[AuthService] Access token para API obtenido correctamente');
         return response.accessToken;
       }
@@ -187,16 +213,15 @@ export class AuthService {
       console.warn('[AuthService] acquireTokenSilent (API scope) falló:', err);
     }
 
-    // 2do intento: popup para consentir el scope si aún no fue consentido
+    // 2do intento: token para openid/profile/email (idToken fallback)
     try {
-      const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      const redirectUri = isLocal ? 'http://localhost:4200/' : 'https://50.16.132.25/';
       const response = await this.msalService.instance.acquireTokenSilent({
         account: account,
         scopes: ['openid', 'profile', 'email']
       });
-      // Usar idToken como fallback: el BFF también lo acepta
       if (response.idToken) {
+        this.cachedToken = response.idToken;
+        this.tokenExpiresAt = response.expiresOn ? response.expiresOn.getTime() : Date.now() + 3600000;
         console.log('[AuthService] Usando idToken como fallback para autorización');
         return response.idToken;
       }
@@ -204,9 +229,11 @@ export class AuthService {
       console.warn('[AuthService] acquireTokenSilent (openid) falló:', err2);
     }
 
-    // 3er intento: idToken guardado en la cuenta MSAL
+    // 3er intento: idToken guardado en account
     const rawIdToken = (account as any).idToken;
     if (rawIdToken) {
+      this.cachedToken = rawIdToken;
+      this.tokenExpiresAt = Date.now() + 3600000;
       console.log('[AuthService] Usando idToken del account cache');
       return rawIdToken;
     }
