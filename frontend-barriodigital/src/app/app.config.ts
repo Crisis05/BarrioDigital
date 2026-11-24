@@ -29,9 +29,13 @@ export function loggerCallback(logLevel: LogLevel, message: string) {
 }
 
 export function MSALInstanceFactory(): IPublicClientApplication {
-  const currentOrigin = (typeof window !== 'undefined' && window.location && window.location.origin)
+  let currentOrigin = (typeof window !== 'undefined' && window.location && window.location.origin)
     ? window.location.origin
     : environment.azureAd.redirectUri.replace(/\/$/, '');
+
+  if (!currentOrigin.includes('localhost') && currentOrigin.startsWith('http://')) {
+    currentOrigin = currentOrigin.replace('http://', 'https://');
+  }
 
   const dynamicRedirectUri = `${currentOrigin}/`;
   const dynamicPostLogoutUri = `${currentOrigin}/login`;
