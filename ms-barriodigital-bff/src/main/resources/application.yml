@@ -9,14 +9,14 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${AZURE_ISSUER_URI:https://login.microsoftonline.com/3c53448e-df26-462e-912f-f8acda44d1a4/v2.0}
+          issuer-uri: ${AZURE_ISSUER_URI:https://login.microsoftonline.com/9544c211-793b-440b-98a8-cc363e1a04cb/v2.0}
           jwk-set-uri: ${AZURE_JWK_SET_URI:https://login.microsoftonline.com/9544c211-793b-440b-98a8-cc363e1a04cb/discovery/v2.0/keys}
 
 azure:
   ad:
     tenant-id: ${AZURE_TENANT_ID:9544c211-793b-440b-98a8-cc363e1a04cb}
     client-id: ${AZURE_CLIENT_ID:3c53448e-df26-462e-912f-f8acda44d1a4}
-    audience: ${AZURE_AUDIENCE:api://3c53448e-df26-462e-912f-f8acda44d1a4/access_as_user}}
+    audience: ${AZURE_AUDIENCE:api://3c53448e-df26-462e-912f-f8acda44d1a4/access_as_user}
 
 # Downstream Microservices URLs
 services:
