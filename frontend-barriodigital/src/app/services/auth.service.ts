@@ -131,8 +131,13 @@ export class AuthService {
 
   public login(): Observable<AuthenticationResult> {
     this.isAuthenticatingSubject.next(true);
+
+    const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+    const redirectUri = isLocal ? 'http://localhost:4200/' : 'https://50.16.132.25/';
+
     return this.msalService.loginPopup({
-      scopes: ['user.read', environment.azureAd.apiScope]
+      scopes: ['user.read', environment.azureAd.apiScope],
+      redirectUri: redirectUri
     }).pipe(
       tap((result: AuthenticationResult) => {
         this.msalService.instance.setActiveAccount(result.account);
